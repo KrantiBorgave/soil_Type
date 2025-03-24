@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Soil Type Classifier</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 156px auto;
+            padding: 20px;
+            background-image: url('image/background.jpeg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            position: relative;
+        }
+        .upload-section {
+            border: 2px dashed #aaff00f1;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+        #result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 10px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #pH {
+            margin-top: 10px;
+            padding: 15px;
+            border-radius: 10px;
+            background-color: #d4edda;
+            color: #155724;
+            border: 10px solid #c3e6cb;
+            display: none;
+        }
+        #loading {
+            display: none;
+            margin: 10px 0;
+            color: #0c5460;
+        }
+        .invisible-hotspot {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            z-index: 2;
+        }
+        /* Added style for potassium info */
+        .potass-info {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #d4edda;
+            color: #155724;
+            border: 2px solid #ffeeba;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Invisible Button for Potassium Info -->
+    <button class="invisible-hotspot" 
+            style=" opacity: 0.5; width: 180px; height: 50px; top: 600px; left: 155%; transform: translateX(-50%); z-index: 9999;"
+            aria-label="Show Potassium Information"
+            onclick="togglePotass()">
+    </button>
+
+    <div class="upload-section">
+        <h1 style="color: #ffffff;">Soil Type Classifier</h1>
+        <input style="background-color: rgba(0, 145, 5, 0.508); color: white; padding: 5px 10px; border-radius: 5px;" type="file" id="imageUpload" accept="image/*">
+        <button style="background-color: rgba(15, 145, 0, 0.508); color: white; padding: 5px 10px; border-radius: 5px;" onclick="uploadImage()">Predict Soil Type</button>
+        <div id="loading">Analyzing soil image...</div>
+        <div id="result"></div>
+        <div id="pH"></div>
+        <div id="potass" class="potass-info"></div> <!-- New potass div -->
+        <div id="crop"></div>
+    </div>
+
+    <script>
+        // Added potassium toggle function
+        function togglePotass() {
+            const potassDiv = document.getElementById("potass");
+            potassDiv.style.display = potassDiv.style.display === "none" ? "block" : "none";
+        }
+
+        async function uploadImage() {
+            const fileInput = document.getElementById("imageUpload");
+            const resultDiv = document.getElementById("result");
+            const loadingDiv = document.getElementById("loading");
+            const pHDiv = document.getElementById("pH");
+            const potassDiv = document.getElementById("potass");
+            const cropDiv = document.getElementById("crop");
+
+            // Reset displays
+            resultDiv.style.display = "none";
+            pHDiv.style.display = "none";
+            potassDiv.style.display = "none";
+            resultDiv.className = "";
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showError("Please select an image first!");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            
+            if (!file.type.startsWith('image/')) {
+                showError("Please upload an image file (JPEG/PNG)");
+                return;
+            }
+
+            loadingDiv.style.display = "block";
+
+            try {
+                const formData = new FormData();
+                formData.append("image", file);
+
+                const response = await fetch("http://localhost:5000/predict", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    showResult(data.soil_type);
+                    showImagePreview(file);
+                    showpH(data.pH, data.crop, data.potass); // Updated to include potass
+                }
+            } catch (error) {
+                showError("Failed to connect to the server");
+            } finally {
+                loadingDiv.style.display = "none";
+            }
+        }
+
+        function showpH(pH, crop, potass) {
+            const pHDiv = document.getElementById("pH");
+            pHDiv.innerHTML = `
+                <h3>Soil Information</h3>
+                <div style="display: flex; justify-content: space-around; text-align: center;">
+                    <div>
+                        <h3>pH</h3>
+                        <p><strong>Soil pH:</strong> ${pH}</p>
+                    </div>
+                    <div>
+                        <h3>Recommended Crop</h3>
+                        <p><strong>Crop:</strong> ${crop}</p>
+                    </div>
+                </div>
+            `;
+            pHDiv.style.display = "block";
+            
+            // Set potassium data but keep it hidden
+            const potassDiv = document.getElementById("potass");
+            potassDiv.innerHTML = `
+                <h3>Potassium Information</h3>
+                <p><strong>Potassium Range:</strong> ${potass}</p>
+            `;
+        }
+
+        // Rest of your existing functions remain unchanged
+        function showResult(soilType) {
+            const resultDiv = document.getElementById("result");
+            resultDiv.innerHTML = `
+                <h3>Prediction Result</h3>
+                <p><strong>Soil Type:</strong> ${soilType}</p>
+            `;
+            resultDiv.className = "success";
+            resultDiv.style.display = "block";
+        }
+
+        function showError(message) {
+            const resultDiv = document.getElementById("result");
+            resultDiv.innerHTML = `<p>${message}</p>`;
+            resultDiv.className = "error";
+            resultDiv.style.display = "block";
+        }
+
+        function showImagePreview(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.createElement("img");
+                img.src = e.target.result;
+                img.style.maxWidth = "200px";
+                img.style.marginTop = "10px";
+                
+                const resultDiv = document.getElementById("result");
+                resultDiv.prepend(img);
+            }
+            reader.readAsDataURL(file);
+        }
+    </script>
+</body>
+</html>
